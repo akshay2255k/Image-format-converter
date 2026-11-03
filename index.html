@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HEIC Converter Studio — 100% Quality Lossless</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Google Font: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- JSZip & FileSaver for robust ZIP generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+  <!-- Primary Engine: libheif standalone WASM Bundle (Embedded WASM, works on file:// without Worker/CORS blocks) -->
+  <script src="https://cdn.jsdelivr.net/npm/libheif-js/libheif-wasm/libheif-bundle.js"></script>
+  <!-- Secondary Engine Fallback: heic2any -->
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Inter"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+            },
+            surface: {
+              card: '#0d131f',
+              base: '#06080d',
+              border: '#1e293b',
+              hover: '#131c2e'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #06080d;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3b82f6;
+    }
+
+    /* Minimal subtle background grid */
+    .bg-grid-tech {
+      background-size: 28px 28px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    }
+
+    .pro-card {
+      background: #0d131f;
+      border: 1px solid #1e293b;
+      box-shadow: 0 12px 35px -10px rgba(0, 0, 0, 0.65);
+    }
+
+    .dropzone-active {
+      border-color: #3b82f6 !important;
+      background-color: rgba(59, 130, 246, 0.06) !important;
+    }
+  </style>
+</head>
+
+<body class="bg-surface-base text-slate-100 min-h-screen flex flex-col font-sans selection:bg-blue-600 selection:text-white bg-grid-tech antialiased">
+
+  <!-- Top Navigation -->
+  <header class="border-b border-surface-border bg-surface-base/80 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-blue-500/20">
+          <i class="fa-solid fa-arrows-rotate"></i>
+        </div>
+        <div class="flex items-baseline gap-2">
+          <span class="font-semibold text-white tracking-tight">HEIC Converter</span>
+          <span class="text-[11px] font-medium text-slate-400 bg-surface-card border border-surface-border px-2 py-0.5 rounded">Studio v3.5 Pro</span>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-2">
+        <div id="engine-status" class="flex items-center gap-1.5 text-xs text-slate-300 bg-surface-card border border-surface-border px-3 py-1.5 rounded-lg">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
+          <span>100% Quality Lossless</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-10 flex flex-col justify-start">
+    
+    <!-- Header Hero -->
+    <div class="text-center max-w-2xl mx-auto mb-9">
+      <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-3">
+        iPhone HEIC &amp; HEIF Converter
+      </h1>
+      <p class="text-slate-400 text-sm sm:text-base font-normal leading-relaxed">
+        High-performance in-memory decoding for iOS 16/17/18 HEIC, Live Photos, and Bursts. Works locally with full resolution and 100% quality.
+      </p>
+    </div>
+
+    <!-- Converter Main Card -->
+    <div class="pro-card rounded-2xl p-6 sm:p-8 mb-8">
+      
+      <!-- Controls Bar -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-surface-border">
+        <div>
+          <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 block mb-2">
+            Target Output Format
+          </label>
+          <div class="inline-flex rounded-lg bg-surface-base p-1 border border-surface-border" id="format-selector">
+            <button type="button" data-format="jpg" class="format-btn px-4 py-1.5 rounded-md text-xs font-semibold bg-blue-600 text-white shadow-sm transition-all">
+              JPG
+            </button>
+            <button type="button" data-format="jpeg" class="format-btn px-4 py-1.5 rounded-md text-xs font-semibold text-slate-400 hover:text-white transition-all">
+              JPEG
+            </button>
+            <button type="button" data-format="png" class="format-btn px-4 py-1.5 rounded-md text-xs font-semibold text-slate-400 hover:text-white transition-all">
+              PNG
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3 bg-surface-base border border-surface-border px-4 py-2.5 rounded-xl">
+          <i class="fa-solid fa-shield-halved text-emerald-400 text-base"></i>
+          <div class="text-xs">
+            <div class="font-medium text-slate-200">100% Original Quality Factor</div>
+            <div class="text-[11px] text-slate-400">Zero compression loss, full Apple color fidelity</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hidden Upload Inputs -->
+      <input type="file" id="file-input" multiple accept=".heic,.HEIC,.heif,.HEIF,.avif,.AVIF,image/heic,image/heif,image/*" class="hidden">
+      <input type="file" id="folder-input" webkitdirectory directory multiple class="hidden">
+
+      <!-- Drag & Drop Zone -->
+      <div id="drop-zone" class="mt-6 border border-dashed border-surface-border hover:border-slate-600 bg-surface-base/50 rounded-xl p-8 sm:p-12 text-center transition-all cursor-pointer">
+        <div class="max-w-md mx-auto flex flex-col items-center">
+          <div class="w-14 h-14 rounded-xl bg-surface-card border border-surface-border flex items-center justify-center text-slate-300 mb-4 shadow-sm">
+            <i class="fa-regular fa-folder-open text-xl"></i>
+          </div>
+
+          <h3 class="text-base font-semibold text-white mb-1">
+            Drag &amp; drop HEIC photos or complete folders
+          </h3>
+          <p class="text-xs text-slate-400 mb-6">
+            Supports multiple individual files or entire folders with subdirectories
+          </p>
+
+          <!-- Upload Actions -->
+          <div class="flex flex-wrap items-center justify-center gap-3">
+            <button type="button" id="btn-select-files" class="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs tracking-wide transition-colors flex items-center gap-2 shadow-sm shadow-blue-600/20">
+              <i class="fa-regular fa-image"></i>
+              <span>Select Individual Files</span>
+            </button>
+
+            <button type="button" id="btn-select-folder" class="px-5 py-2.5 rounded-lg bg-surface-card hover:bg-surface-hover text-slate-200 border border-surface-border font-medium text-xs tracking-wide transition-colors flex items-center gap-2">
+              <i class="fa-solid fa-folder-tree"></i>
+              <span>Upload Complete Folder</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Batch Operations Toolbar -->
+      <div id="batch-toolbar" class="hidden mt-6 pt-5 border-t border-surface-border flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3 text-xs text-slate-300">
+          <span>Total images: <strong id="queue-count" class="text-white">0</strong></span>
+          <span class="text-slate-600">&bull;</span>
+          <span id="queue-status-text" class="text-slate-400">Ready to convert</span>
+        </div>
+
+        <div class="flex items-center gap-2.5 w-full sm:w-auto">
+          <button type="button" id="btn-clear" class="px-3.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all">
+            Clear Queue
+          </button>
+
+          <button type="button" id="btn-convert-all" class="flex-1 sm:flex-initial px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs tracking-wide transition-all shadow-sm flex items-center justify-center gap-2">
+            <i class="fa-solid fa-bolt text-[11px]"></i>
+            <span>Convert All</span>
+          </button>
+
+          <!-- Download ZIP Button -->
+          <button type="button" id="btn-download-zip" class="hidden flex-1 sm:flex-initial px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs tracking-wide transition-all shadow-sm shadow-emerald-600/20 flex items-center justify-center gap-2">
+            <i class="fa-solid fa-file-zipper"></i>
+            <span>Download All as ZIP</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Batch Progress Bar -->
+      <div id="batch-progress" class="hidden mt-4 pt-2">
+        <div class="flex justify-between text-xs text-slate-400 mb-1.5 font-medium">
+          <span id="batch-progress-label">Processing Images...</span>
+          <span id="batch-progress-pct" class="text-blue-400 font-semibold">0%</span>
+        </div>
+        <div class="w-full bg-surface-base rounded-full h-1.5 overflow-hidden border border-surface-border">
+          <div id="batch-progress-bar" class="h-full bg-blue-600 w-0 transition-all duration-200"></div>
+        </div>
+      </div>
+
+      <!-- Queue Display -->
+      <div id="queue-list" class="mt-6 space-y-2.5 max-h-[480px] overflow-y-auto pr-1"></div>
+    </div>
+
+    <!-- Tech Guarantee Highlights -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
+      <div class="pro-card rounded-xl p-4 flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/20 text-xs">
+          <i class="fa-solid fa-microchip"></i>
+        </div>
+        <div>
+          <h4 class="text-xs font-semibold text-white mb-0.5">In-Memory WASM Engine</h4>
+          <p class="text-[11px] text-slate-400 leading-relaxed">Runs libheif WASM directly in the main browser memory. No external Worker cross-origin blocks when run locally.</p>
+        </div>
+      </div>
+
+      <div class="pro-card rounded-xl p-4 flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/20 text-xs">
+          <i class="fa-solid fa-images"></i>
+        </div>
+        <div>
+          <h4 class="text-xs font-semibold text-white mb-0.5">Live Photos &amp; Bursts</h4>
+          <p class="text-[11px] text-slate-400 leading-relaxed">Extracts the primary high-resolution layer from multi-frame iPhone bursts and Live Photo HEIC containers.</p>
+        </div>
+      </div>
+
+      <div class="pro-card rounded-xl p-4 flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/20 text-xs">
+          <i class="fa-solid fa-box-archive"></i>
+        </div>
+        <div>
+          <h4 class="text-xs font-semibold text-white mb-0.5">Uncompressed ZIP Export</h4>
+          <p class="text-[11px] text-slate-400 leading-relaxed">Batch and folder conversions are packaged together into a single organized ZIP without recompression.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer with Requested Branding -->
+  <footer class="border-t border-surface-border bg-surface-base/80 py-6 mt-auto">
+    <div class="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
+      <div class="text-slate-400">
+        Lossless HEIC Client Engine &bull; Private &amp; Local Processing
+      </div>
+
+      <!-- Specific Powered By Requirement -->
+      <a 
+        href="https://www.instagram.com/akshaye_e_/" 
+        target="_blank" 
+        rel="noopener noreferrer" 
+        class="inline-flex items-center gap-2.5 px-4 py-2 rounded-lg bg-surface-card border border-surface-border hover:border-slate-700 text-slate-300 hover:text-white transition-all group shadow-sm"
+      >
+        <span class="text-[11px] font-semibold tracking-wider text-slate-400 group-hover:text-slate-300 uppercase">
+          POWERED BY &rarr;
+        </span>
+        <span class="font-semibold text-white">akshaye_e_</span>
+        <i class="fa-brands fa-instagram text-slate-400 group-hover:text-pink-400 transition-colors text-sm"></i>
+      </a>
+    </div>
+  </footer>
+
+  <!-- Toast Notification System -->
+  <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Converter Core Engine -->
+  <script>
+    (function() {
+      // Application State
+      const state = {
+        targetFormat: 'jpg',
+        queue: [],
+        isProcessing: false,
+        libheifInstance: null,
+        libheifInitPromise: null
+      };
+
+      // Asynchronously instantiate libheif-bundle
+      async function getLibheif() {
+        if (state.libheifInstance) {
+          return state.libheifInstance;
+        }
+
+        if (state.libheifInitPromise) {
+          return await state.libheifInitPromise;
+        }
+
+        state.libheifInitPromise = (async () => {
+          if (typeof window.libheif === 'function') {
+            try {
+              const res = await window.libheif();
+              state.libheifInstance = res;
+              return res;
+            } catch (e) {
+              console.warn('window.libheif() execution error:', e);
+            }
+          }
+          if (typeof window.libheif === 'object' && window.libheif !== null) {
+            state.libheifInstance = window.libheif;
+            return window.libheif;
+          }
+          return null;
+        })();
+
+        return await state.libheifInitPromise;
+      }
+
+      // Pre-warm the WASM engine in the background
+      getLibheif().catch(e => console.warn('Pre-warm notice:', e));
+
+      // DOM Elements
+      const dropZone = document.getElementById('drop-zone');
+      const fileInput = document.getElementById('file-input');
+      const folderInput = document.getElementById('folder-input');
+      const btnSelectFiles = document.getElementById('btn-select-files');
+      const btnSelectFolder = document.getElementById('btn-select-folder');
+      const formatButtons = document.querySelectorAll('.format-btn');
+      const batchToolbar = document.getElementById('batch-toolbar');
+      const queueList = document.getElementById('queue-list');
+      const queueCount = document.getElementById('queue-count');
+      const queueStatusText = document.getElementById('queue-status-text');
+      const btnConvertAll = document.getElementById('btn-convert-all');
+      const btnDownloadZip = document.getElementById('btn-download-zip');
+      const btnClear = document.getElementById('btn-clear');
+      const batchProgress = document.getElementById('batch-progress');
+      const batchProgressBar = document.getElementById('batch-progress-bar');
+      const batchProgressPct = document.getElementById('batch-progress-pct');
+      const batchProgressLabel = document.getElementById('batch-progress-label');
+
+      // Target Format Selection
+      formatButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const selected = btn.dataset.format;
+          state.targetFormat = selected;
+
+          formatButtons.forEach(b => {
+            if (b.dataset.format === selected) {
+              b.className = 'format-btn px-4 py-1.5 rounded-md text-xs font-semibold bg-blue-600 text-white shadow-sm transition-all';
+            } else {
+              b.className = 'format-btn px-4 py-1.5 rounded-md text-xs font-semibold text-slate-400 hover:text-white transition-all';
+            }
+          });
+          showToast(`Target format: .${selected.toUpperCase()}`, 'info');
+        });
+      });
+
+      // File Selection Handlers
+      btnSelectFiles.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fileInput.value = null;
+        fileInput.click();
+      });
+
+      btnSelectFolder.addEventListener('click', (e) => {
+        e.stopPropagation();
+        folderInput.value = null;
+        folderInput.click();
+      });
+
+      dropZone.addEventListener('click', () => {
+        fileInput.value = null;
+        fileInput.click();
+      });
+
+      fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+      folderInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+      // Drag & Drop
+      ['dragenter', 'dragover'].forEach(evt => {
+        dropZone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.add('dropzone-active');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(evt => {
+        dropZone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.remove('dropzone-active');
+        });
+      });
+
+      dropZone.addEventListener('drop', async (e) => {
+        const dt = e.dataTransfer;
+        if (!dt) return;
+
+        if (dt.items && dt.items.length > 0) {
+          const entries = [];
+          for (let i = 0; i < dt.items.length; i++) {
+            const item = dt.items[i];
+            if (item.webkitGetAsEntry) {
+              const entry = item.webkitGetAsEntry();
+              if (entry) entries.push(entry);
+            }
+          }
+
+          if (entries.length > 0) {
+            const extracted = await scanEntries(entries);
+            handleFiles(extracted);
+            return;
+          }
+        }
+
+        if (dt.files && dt.files.length > 0) {
+          handleFiles(dt.files);
+        }
+      });
+
+      // Recursive directory scanner for dropped folders
+      async function scanEntries(entries) {
+        const fileList = [];
+        const queue = [...entries];
+
+        while (queue.length > 0) {
+          const entry = queue.shift();
+          if (entry.isFile) {
+            try {
+              const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+              fileList.push(file);
+            } catch (err) {
+              console.warn('Could not read file:', entry.name);
+            }
+          } else if (entry.isDirectory) {
+            try {
+              const reader = entry.createReader();
+              const readEntries = () => new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+              let batch;
+              do {
+                batch = await readEntries();
+                for (let sub of batch) queue.push(sub);
+              } while (batch.length > 0);
+            } catch (err) {
+              console.warn('Could not read directory:', entry.name);
+            }
+          }
+        }
+        return fileList;
+      }
+
+      // Add to Queue
+      function handleFiles(files) {
+        if (!files || files.length === 0) return;
+
+        let added = 0;
+        Array.from(files).forEach(file => {
+          const name = file.name || '';
+          if (name.startsWith('._') || name === '.DS_Store' || name === 'Thumbs.db') return;
+
+          const id = 'task_' + Math.random().toString(36).substring(2, 10);
+          state.queue.push({
+            id: id,
+            file: file,
+            name: name,
+            size: file.size,
+            status: 'queued',
+            targetExt: state.targetFormat,
+            resultBlob: null,
+            resultUrl: null,
+            error: null
+          });
+          added++;
+        });
+
+        if (added > 0) {
+          showToast(`Added ${added} ${added === 1 ? 'image' : 'images'} to queue`, 'info');
+          renderUI();
+        }
+      }
+
+      // UI Renderer
+      function renderUI() {
+        queueCount.textContent = state.queue.length;
+
+        if (state.queue.length > 0) {
+          batchToolbar.classList.remove('hidden');
+        } else {
+          batchToolbar.classList.add('hidden');
+          batchProgress.classList.add('hidden');
+        }
+
+        const completedCount = state.queue.filter(i => i.status === 'completed').length;
+        const convertingCount = state.queue.filter(i => i.status === 'converting').length;
+
+        if (convertingCount > 0) {
+          queueStatusText.textContent = `Converting ${convertingCount} item(s)...`;
+          queueStatusText.className = 'text-blue-400 font-medium animate-pulse';
+        } else if (completedCount === state.queue.length && completedCount > 0) {
+          queueStatusText.textContent = `All ${completedCount} images converted!`;
+          queueStatusText.className = 'text-emerald-400 font-medium';
+        } else {
+          queueStatusText.textContent = `${completedCount} of ${state.queue.length} completed`;
+          queueStatusText.className = 'text-slate-400';
+        }
+
+        if (completedCount >= 1) {
+          btnDownloadZip.classList.remove('hidden');
+        } else {
+          btnDownloadZip.classList.add('hidden');
+        }
+
+        queueList.innerHTML = '';
+        state.queue.forEach(item => {
+          const el = document.createElement('div');
+          el.className = 'bg-surface-base/80 border border-surface-border rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-colors hover:border-slate-700';
+          el.id = item.id;
+
+          let badgeHtml = '';
+          let actionHtml = '';
+          let previewHtml = '';
+
+          if (item.status === 'completed' && item.resultUrl) {
+            previewHtml = `<img src="${item.resultUrl}" class="w-11 h-11 rounded-lg object-cover bg-slate-800 border border-surface-border shrink-0">`;
+          } else {
+            previewHtml = `
+              <div class="w-11 h-11 rounded-lg bg-surface-card border border-surface-border flex items-center justify-center text-slate-400 shrink-0 text-sm">
+                <i class="fa-regular fa-image"></i>
+              </div>
+            `;
+          }
+
+          if (item.status === 'queued') {
+            badgeHtml = `<span class="px-2 py-0.5 rounded text-[11px] font-medium bg-surface-card text-slate-400 border border-surface-border">Ready</span>`;
+            actionHtml = `
+              <button onclick="window.convertItem('${item.id}')" class="px-3 py-1.5 rounded-lg bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 text-xs font-medium transition-colors">
+                Convert
+              </button>
+              <button onclick="window.removeItem('${item.id}')" class="w-7 h-7 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 flex items-center justify-center transition-colors">
+                <i class="fa-solid fa-xmark text-xs"></i>
+              </button>
+            `;
+          } else if (item.status === 'converting') {
+            badgeHtml = `
+              <span class="px-2 py-0.5 rounded text-[11px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center gap-1.5">
+                <i class="fa-solid fa-circle-notch fa-spin text-[10px]"></i> Converting 100%
+              </span>
+            `;
+            actionHtml = `<span class="text-xs text-slate-400">Processing...</span>`;
+          } else if (item.status === 'completed') {
+            const outName = formatOutputName(item.name, item.targetExt);
+            const sizeStr = formatBytes(item.resultBlob ? item.resultBlob.size : 0);
+            badgeHtml = `
+              <span class="px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                <i class="fa-solid fa-check text-[10px]"></i> Converted (${sizeStr})
+              </span>
+            `;
+            actionHtml = `
+              <a href="${item.resultUrl}" download="${outName}" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm">
+                <i class="fa-solid fa-download text-[11px]"></i>
+                <span>Save</span>
+              </a>
+              <button onclick="window.removeItem('${item.id}')" class="w-7 h-7 rounded-lg text-slate-500 hover:text-slate-300 flex items-center justify-center">
+                <i class="fa-solid fa-xmark text-xs"></i>
+              </button>
+            `;
+          } else if (item.status === 'error') {
+            badgeHtml = `
+              <span class="px-2 py-0.5 rounded text-[11px] font-medium bg-red-500/10 text-red-400 border border-red-500/20 flex items-center gap-1.5" title="${item.error || 'Conversion error'}">
+                <i class="fa-solid fa-triangle-exclamation text-[10px]"></i> Error: ${escapeHtml(item.error || 'Decode Error')}
+              </span>
+            `;
+            actionHtml = `
+              <button onclick="window.convertItem('${item.id}')" class="px-2.5 py-1.5 rounded-lg bg-surface-card text-xs text-slate-300 hover:text-white border border-surface-border">
+                Retry
+              </button>
+              <button onclick="window.removeItem('${item.id}')" class="w-7 h-7 rounded-lg text-slate-500 hover:text-red-400 flex items-center justify-center">
+                <i class="fa-solid fa-xmark text-xs"></i>
+              </button>
+            `;
+          }
+
+          el.innerHTML = `
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+              ${previewHtml}
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-xs font-medium text-slate-200 truncate max-w-[200px] sm:max-w-[320px]" title="${item.name}">${item.name}</span>
+                  <span class="text-[11px] text-slate-400">(${formatBytes(item.size)})</span>
+                  <i class="fa-solid fa-arrow-right text-[10px] text-slate-400"></i>
+                  <span class="text-xs font-bold uppercase text-blue-400">.${item.targetExt}</span>
+                </div>
+                <div>${badgeHtml}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
+              ${actionHtml}
+            </div>
+          `;
+
+          queueList.appendChild(el);
+        });
+      }
+
+      function escapeHtml(str) {
+        return (str || '').replace(/[&<>'"]/g, 
+          tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+      }
+
+      // 100% Quality Lossless Canvas Export
+      function canvasToBlobLossless(canvas, targetExt) {
+        return new Promise((resolve, reject) => {
+          let mime = 'image/jpeg';
+          if (targetExt === 'png') {
+            mime = 'image/png';
+          }
+          canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Canvas export to blob failed'));
+          }, mime, 1.0);
+        });
+      }
+
+      // PRIMARY ENGINE: libheif in-memory decoding (Safe for file:// and WebAssembly)
+      async function decodeWithLibheif(buffer) {
+        const lib = await getLibheif();
+        if (!lib || !lib.HeifDecoder) {
+          throw new Error('libheif WebAssembly engine unavailable');
+        }
+
+        const decoder = new lib.HeifDecoder();
+        const data = decoder.decode(new Uint8Array(buffer));
+        if (!data || data.length === 0) {
+          throw new Error('No image frames found in container');
+        }
+
+        // Extract primary full-resolution frame
+        const image = data[0];
+        const width = image.get_width();
+        const height = image.get_height();
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.createImageData(width, height);
+
+        await new Promise((resolve, reject) => {
+          image.display(imageData, (displayData) => {
+            if (!displayData) {
+              reject(new Error('Rendering HEIF frame data failed'));
+            } else {
+              resolve();
+            }
+          });
+        });
+
+        ctx.putImageData(imageData, 0, 0);
+        return canvas;
+      }
+
+      // SECONDARY ENGINE: Native browser decode (Supports modern Safari & native AVIF/JPEG/PNG)
+      async function decodeWithNative(file) {
+        if ('createImageBitmap' in window) {
+          try {
+            const bmp = await createImageBitmap(file);
+            const canvas = document.createElement('canvas');
+            canvas.width = bmp.width;
+            canvas.height = bmp.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(bmp, 0, 0);
+            bmp.close();
+            return canvas;
+          } catch (e) {
+            // fallback to Image
+          }
+        }
+
+        return new Promise((resolve, reject) => {
+          const url = URL.createObjectURL(file);
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth || img.width;
+            canvas.height = img.naturalHeight || img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            URL.revokeObjectURL(url);
+            resolve(canvas);
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('Native browser decoder failed'));
+          };
+          img.src = url;
+        });
+      }
+
+      // TERTIARY ENGINE: heic2any
+      async function decodeWithHeic2Any(file, targetExt) {
+        if (typeof heic2any === 'undefined') {
+          throw new Error('heic2any library not loaded');
+        }
+        let mime = targetExt === 'png' ? 'image/png' : 'image/jpeg';
+        const res = await heic2any({
+          blob: file,
+          toType: mime,
+          quality: 1.0
+        });
+        return Array.isArray(res) ? res[0] : res;
+      }
+
+      // Master Bulletproof Conversion Router
+      async function convertFileRobust(file, targetExt) {
+        const ext = file.name.split('.').pop().toLowerCase();
+        const isStandard = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif'].includes(ext);
+
+        // Try standard native decoding first if already a regular web format
+        if (isStandard) {
+          try {
+            const canvas = await decodeWithNative(file);
+            return await canvasToBlobLossless(canvas, targetExt);
+          } catch (e) {
+            // Proceed to libheif
+          }
+        }
+
+        let buffer;
+        try {
+          buffer = await file.arrayBuffer();
+        } catch (e) {
+          buffer = await new Response(file).arrayBuffer();
+        }
+
+        let lastError = null;
+
+        // 1. Try Libheif WASM Engine
+        try {
+          const canvas = await decodeWithLibheif(buffer);
+          return await canvasToBlobLossless(canvas, targetExt);
+        } catch (err) {
+          lastError = err;
+          console.warn('Libheif pipeline note:', err.message);
+        }
+
+        // 2. Try Native Bitmap decoder (e.g., Safari iOS or native browser support)
+        try {
+          const canvas = await decodeWithNative(file);
+          return await canvasToBlobLossless(canvas, targetExt);
+        } catch (err) {
+          console.warn('Native decode note:', err.message);
+        }
+
+        // 3. Try heic2any
+        try {
+          const result = await decodeWithHeic2Any(file, targetExt);
+          if (result instanceof Blob) {
+            return result;
+          }
+        } catch (err) {
+          console.warn('heic2any pipeline note:', err.message);
+        }
+
+        throw new Error(lastError ? lastError.message : 'Corrupted or unsupported HEIC file');
+      }
+
+      function formatOutputName(originalName, targetExt) {
+        const lastDot = originalName.lastIndexOf('.');
+        const baseName = lastDot !== -1 ? originalName.substring(0, lastDot) : originalName;
+        return `${baseName}.${targetExt.toLowerCase()}`;
+      }
+
+      // Single item conversion
+      window.convertItem = async function(id) {
+        const item = state.queue.find(i => i.id === id);
+        if (!item || item.status === 'converting') return;
+
+        item.status = 'converting';
+        item.targetExt = state.targetFormat;
+        renderUI();
+
+        try {
+          const blob = await convertFileRobust(item.file, item.targetExt);
+          item.resultBlob = blob;
+          item.resultUrl = URL.createObjectURL(blob);
+          item.status = 'completed';
+          showToast(`Successfully converted ${item.name}`, 'success');
+        } catch (err) {
+          console.error('Error on file', item.name, err);
+          item.status = 'error';
+          item.error = err.message || 'HEIC decode error';
+          showToast(`Failed: ${item.name}`, 'error');
+        } finally {
+          renderUI();
+        }
+      };
+
+      // Item removal
+      window.removeItem = function(id) {
+        const index = state.queue.findIndex(i => i.id === id);
+        if (index !== -1) {
+          if (state.queue[index].resultUrl) {
+            URL.revokeObjectURL(state.queue[index].resultUrl);
+          }
+          state.queue.splice(index, 1);
+          renderUI();
+        }
+      };
+
+      // Clear all
+      btnClear.addEventListener('click', () => {
+        state.queue.forEach(i => {
+          if (i.resultUrl) URL.revokeObjectURL(i.resultUrl);
+        });
+        state.queue = [];
+        renderUI();
+        showToast('Queue cleared', 'info');
+      });
+
+      // Batch conversion
+      btnConvertAll.addEventListener('click', async () => {
+        const pending = state.queue.filter(i => i.status === 'queued' || i.status === 'error');
+        if (pending.length === 0) {
+          showToast('No pending items to convert.', 'info');
+          return;
+        }
+
+        state.isProcessing = true;
+        btnConvertAll.disabled = true;
+        batchProgress.classList.remove('hidden');
+
+        let done = 0;
+        const total = pending.length;
+
+        for (let i = 0; i < total; i++) {
+          const item = pending[i];
+          item.status = 'converting';
+          item.targetExt = state.targetFormat;
+          renderUI();
+
+          try {
+            const blob = await convertFileRobust(item.file, item.targetExt);
+            item.resultBlob = blob;
+            item.resultUrl = URL.createObjectURL(blob);
+            item.status = 'completed';
+          } catch (err) {
+            console.error('Batch item failed:', item.name, err);
+            item.status = 'error';
+            item.error = err.message || 'Decode error';
+          }
+
+          done++;
+          const pct = Math.round((done / total) * 100);
+          batchProgressBar.style.width = pct + '%';
+          batchProgressPct.textContent = pct + '%';
+          batchProgressLabel.textContent = `Converted ${done} of ${total} images...`;
+          renderUI();
+        }
+
+        state.isProcessing = false;
+        btnConvertAll.disabled = false;
+        showToast('Batch processing complete!', 'success');
+      });
+
+      // ZIP packaging
+      btnDownloadZip.addEventListener('click', async () => {
+        const completedItems = state.queue.filter(i => i.status === 'completed' && i.resultBlob);
+        if (completedItems.length === 0) {
+          showToast('No converted photos available for ZIP download.', 'warning');
+          return;
+        }
+
+        const originalBtnHTML = btnDownloadZip.innerHTML;
+        btnDownloadZip.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-xs"></i> <span>Packaging ZIP...</span>`;
+        btnDownloadZip.disabled = true;
+
+        try {
+          const zip = new JSZip();
+          const imgFolder = zip.folder("Converted_Photos");
+          const usedNames = new Set();
+
+          completedItems.forEach(item => {
+            let filename = formatOutputName(item.name, item.targetExt);
+            if (usedNames.has(filename)) {
+              const dot = filename.lastIndexOf('.');
+              const base = dot !== -1 ? filename.substring(0, dot) : filename;
+              const ext = filename.split('.').pop();
+              filename = `${base}_${Math.random().toString(36).substr(2, 4)}.${ext}`;
+            }
+            usedNames.add(filename);
+            imgFolder.file(filename, item.resultBlob);
+          });
+
+          const zipContent = await zip.generateAsync({
+            type: "blob",
+            compression: "STORE" // 100% Original Lossless, zero recompression
+          });
+
+          saveAs(zipContent, "Converted_Photos.zip");
+          showToast('ZIP downloaded successfully!', 'success');
+        } catch (err) {
+          console.error('ZIP creation error:', err);
+          showToast('Failed to create ZIP package.', 'error');
+        } finally {
+          btnDownloadZip.innerHTML = originalBtnHTML;
+          btnDownloadZip.disabled = false;
+        }
+      });
+
+      function formatBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+      }
+
+      function showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        
+        let borderClass = 'border-surface-border text-slate-200';
+        let iconClass = 'fa-solid fa-circle-info text-blue-400';
+
+        if (type === 'success') {
+          borderClass = 'border-emerald-500/30 text-emerald-200';
+          iconClass = 'fa-solid fa-circle-check text-emerald-400';
+        } else if (type === 'error') {
+          borderClass = 'border-red-500/30 text-red-200';
+          iconClass = 'fa-solid fa-circle-exclamation text-red-400';
+        } else if (type === 'warning') {
+          borderClass = 'border-amber-500/30 text-amber-200';
+          iconClass = 'fa-solid fa-triangle-exclamation text-amber-400';
+        }
+
+        toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-surface-card border ${borderClass} shadow-xl text-xs font-medium transform transition-all duration-200 translate-y-3 opacity-0`;
+        toast.innerHTML = `<i class="${iconClass}"></i><span>${escapeHtml(message)}</span>`;
+        
+        container.appendChild(toast);
+
+        setTimeout(() => {
+          toast.classList.remove('translate-y-3', 'opacity-0');
+        }, 10);
+
+        setTimeout(() => {
+          toast.classList.add('translate-y-3', 'opacity-0');
+          setTimeout(() => toast.remove(), 250);
+        }, 3200);
+      }
+    })();
+  </script>
+</body>
+</html>
